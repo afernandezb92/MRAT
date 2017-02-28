@@ -32,7 +32,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
+import afernandezb92.mrat.cipher.RSAEncryption;
 import afernandezb92.mrat.messages.Mensaje;
+
 
 /**
  * Created by Alejandro on 26/01/2017.
@@ -45,8 +47,10 @@ public class Client extends MainActivity {
     protected static final int RGETINSTALLEDAPPS = 5;
     protected static final int TGETINFO = 6;
     protected static final int RGETINFO = 7;
-    protected static final int ROK = 8;
-    protected static final int RERR = 9;
+    protected static final int TGETKEY = 8;
+    protected static final int RGETKEY = 9;
+    protected static final int ROK = 10;
+    protected static final int RERR = 11;
     View view;
     Socket socket = null;
     InetAddress address;
@@ -57,7 +61,7 @@ public class Client extends MainActivity {
     Boolean debug = true;
     Context context;
 
-    public Client (String hostname, int port, /*Context cont, View v*/ Context context){
+    public Client (String hostname, int port, Context context){
         try {
             // Sin estas dos lineas no se permite crear el socket
             StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
@@ -109,6 +113,13 @@ public class Client extends MainActivity {
                         }
                         sendInfo(info);
                         break;
+                    case TGETKEY:
+                        Mensaje.TGetKey key = (Mensaje.TGetKey) request;
+                        if (debug){
+                            System.out.println(key);
+                        }
+                        sendKey(key);
+                        break;
                     default:
                         System.out.println("Mensaje desconocido");
                 }
@@ -120,6 +131,36 @@ public class Client extends MainActivity {
         } finally{
             i.close();
             o.close();
+        }
+    }
+
+    //KEYS
+    private void sendKey(Mensaje.TGetKey t){
+        String key;
+        RSAEncryption rsa = new RSAEncryption();
+        key = rsa.encrypt();
+        if (key == null) {
+            Mensaje.RErr err = new Mensaje.RErr(t, "error with keys");
+            try {
+                if (debug){
+                    System.out.println(err);
+                }
+                o = socket.getOutputStream();
+                err.writeTo(o);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            Mensaje.RGetKey mKey = new Mensaje.RGetKey(t, key);
+            try {
+                if (debug){
+                    System.out.println(mKey);
+                }
+                o = socket.getOutputStream();
+                mKey.writeTo(o);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
 

