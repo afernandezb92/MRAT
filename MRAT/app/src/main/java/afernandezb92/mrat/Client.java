@@ -67,6 +67,7 @@ public class Client extends MainActivity {
             StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
             StrictMode.setThreadPolicy(policy);
 
+            System.out.println("host " + hostname);
             address = InetAddress.getByName(hostname);
             socket = new Socket(address, port);
             this.context = context;

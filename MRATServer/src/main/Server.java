@@ -6,6 +6,7 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.sql.Timestamp;
+import java.util.Base64;
 import java.util.Random;
 
 import cipher.CipherAES;
@@ -66,8 +67,9 @@ public class Server {
 				System.out.println("Waiting client");
 				socket = s.accept();
 				getId();
-				sendKey();
 				keyMaster = Keys.generateKey();
+				System.out.println("KeyMaster: " + Base64.getEncoder().encodeToString(keyMaster));
+				sendKey();
 		} catch (IOException e) {
 			e.printStackTrace();
 		} catch (Exception e) {
@@ -101,7 +103,13 @@ public class Server {
 		key = Keys.getKey(clientId);
 		ts = new Timestamp(System.currentTimeMillis());
 		nonce = Keys.generateNonce();
-		TSendKey tkey = new TSendKey(key, key, ts, nonce);
+		if (debug){
+            System.out.println("key: " + new String(Base64.getEncoder().encodeToString(key)));
+            System.out.println("keyMaster: " + new String(Base64.getEncoder().encodeToString(keyMaster)));
+            System.out.println("nonce: " + nonce);
+            System.out.println("ts: " + ts);
+        }
+		TSendKey tkey = new TSendKey(key, keyMaster, ts, nonce);
 		Mensaje reply;
 		try {
 			o = socket.getOutputStream();
