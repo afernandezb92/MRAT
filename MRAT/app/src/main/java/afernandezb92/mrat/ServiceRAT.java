@@ -54,6 +54,7 @@ public class ServiceRAT extends IntentService {
             hostname = (String) extras.get("IP");
         }
         System.out.println("ip " + hostname);
-        Client client = new Client(hostname, portnumber, this);
+        //Client client = new Client(hostname, portnumber, this);
+        Client client = new Client("192.168.1.35", portnumber, this);
     }
 }
