@@ -87,7 +87,7 @@ public class CipherAES {
     }
 
 
-    public static String decipherInGCMMode(byte[] ciphertextBytesWithNonce) throws InvalidCipherTextException {
+    public static byte[] decipherInGCMMode(byte[] ciphertextBytesWithNonce) throws InvalidCipherTextException {
     	AESEngine engine = new AESEngine();
         AEADBlockCipher cipher = new GCMBlockCipher(engine);
 
@@ -106,15 +106,17 @@ public class CipherAES {
 
         int decipheredBytesSize = cipher.processBytes(ciphertext, 0, ciphertext.length, plaintextBytes, 0);
         cipher.doFinal(plaintextBytes, decipheredBytesSize);
+        
+        return plaintextBytes;
 
-        String plaintext;
+        /*String plaintext;
         try {
             plaintext = new String(plaintextBytes, "utf-8");
         } catch (UnsupportedEncodingException e) {
             plaintext = new String(plaintextBytes);
         }
 
-        return plaintext;
+        return plaintext;*/
     }
     
     private static byte[] getRandomBytes(int length) {

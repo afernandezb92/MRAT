@@ -118,9 +118,9 @@ public class Server {
 			System.out.println("Esperando recibir");
 			reply = Mensaje.readMsg(i);
 			if (reply.getType() == ROK){
-				System.out.println("C");
 				ROk ok = (ROk) reply;
 				System.out.println(ok);
+				System.out.println("IsValid: " + ok.isValid(tkey.getNonce()));
 			} else{
 				RErr err = (RErr) reply;
 				System.out.println(err.getError());

@@ -8,6 +8,7 @@ import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.sql.Timestamp;
+import java.util.Arrays;
 import java.util.Base64;
 
 import cipher.CipherAES;
@@ -27,11 +28,13 @@ public abstract class Mensaje {
 	protected static final int ROK = 12;
 	protected static final int RERR = 13;
 	protected static final int INTSIZE = 4;
+	protected static final int ONEMINUTE = 60;
 	private final int type;
 	private final int tag;
 	private static int taggen;
 	DataOutputStream outstream = null;
 	Socket socket = null;
+	Boolean debug = true;
 	
 	public Mensaje(int t, int msg){
 		type = msg;
@@ -165,15 +168,6 @@ public abstract class Mensaje {
 			tp = "Mensaje Desconocido";
 		}
 		return tp;
-		}
-	
-	public byte[] marshallMsg(byte[] key, byte[] keyMaster, Timestamp ts, int nonce) throws IOException{
-		ByteArrayOutputStream outputStream = new ByteArrayOutputStream( );
-		outputStream.write(key);
-		outputStream.write(keyMaster);
-		outputStream.write(marshallInt(nonce));
-		outputStream.write(ts.toString().getBytes("UTF-8"));
-		return outputStream.toByteArray( );
 	}
 	
 	public static byte[] marshallString(String s) throws UnsupportedEncodingException{
@@ -209,6 +203,16 @@ public abstract class Mensaje {
 		d =  value[0] & 0xFF;
 		return  a | b | c | d;
 	}
+	
+	public boolean isValid (Timestamp t, int nonce, int lastNonce){
+        Timestamp timeNow = new Timestamp(System.currentTimeMillis());
+        System.out.println("TimeNow: " + timeNow.getTime());
+        System.out.println("TimeMsg: " + t.getTime());
+        if((timeNow.getTime() - t.getTime() < ONEMINUTE) || (nonce != lastNonce + 1)){
+            return false;
+        }
+        return true;
+    }
 	
 	public static class TGetContact extends Mensaje{
 		
@@ -491,30 +495,40 @@ public abstract class Mensaje {
 			nonce = n;
 		}
 		
-		public byte[] getKeyEncrypt(){
+		public byte[] getKey(){
 			return keyMaster;
 		}
 		
-		public int getNonceEncrypt(){
+		public int getNonce(){
 			return nonce;
+		}
+		
+		public byte[] marshallMsg(byte[] key, byte[] keyMaster, int nonce, Timestamp ts) throws IOException{
+			ByteArrayOutputStream outputStream = new ByteArrayOutputStream( );
+			outputStream.write(key);
+			outputStream.write(keyMaster);
+			outputStream.write(marshallInt(nonce));
+			outputStream.write(ts.toString().getBytes("UTF-8"));
+			return outputStream.toByteArray( );
 		}
 
 		protected void readFrom(InputStream i) throws Exception {
-			DataInputStream incon = new DataInputStream(i);
+			/*DataInputStream incon = new DataInputStream(i);
 			byte [] buffer = new byte[INTSIZE]; 
 			incon.read(buffer); 
 			int size = unmarshallInt(buffer);
 			buffer = new byte[size];
 			incon.read(buffer);
 			CipherAES cipher = new CipherAES(key);
-			System.out.println("Msg: " + cipher.decipherInGCMMode(buffer));
+			System.out.println("Msg: " + cipher.decipherInGCMMode(buffer));*/
+			//Implements in Client
 		}
 		
 		public void writeTo(OutputStream o) throws Exception{
 			CipherAES cipher = new CipherAES(key);
 			super.writeTo(o);
 			DataOutputStream output = new DataOutputStream(o);
-			msgBytes = marshallMsg(key, keyMaster, ts, nonce);
+			msgBytes = marshallMsg(key, keyMaster, nonce, ts);
 			byte[] msgCipher = cipher.cipherInGCMMode(msgBytes);
 			System.out.println(msgCipher.length);
 			output.write(marshallInt(msgCipher.length));
@@ -558,38 +572,70 @@ public abstract class Mensaje {
 	}
 
 	public static class ROk extends Mensaje{
-		String timeStamp, nonce;
-	
-		public ROk(int tag){
-			super(tag, ROK);
-		}
-	
-		public ROk(Mensaje t, String ts, String n){
-			super(t.getTag(), ROK);
-			timeStamp = ts;
-			nonce = n;
-		}
-		
-		public String getNonce(){
-			return nonce;
-		}
-		
-		public String getTimeStamp(){
-			return timeStamp;
-		}
+		CipherAES cipher;
+        Timestamp timestamp;
+        int nonce;
+        byte[] msgBytes;
 
-		protected void readFrom(InputStream i) throws Exception {
-			DataInputStream incon = new DataInputStream(i);
-			timeStamp = incon.readUTF();
-			nonce = incon.readUTF();
-		}
-		
-		public void writeTo(OutputStream o) throws Exception{
-			super.writeTo(o);
-			DataOutputStream output = new DataOutputStream(o);
-            output.writeUTF(timeStamp);
-            output.writeUTF(nonce);
-		}
+        public ROk(int tag){
+            super(tag, ROK);
+        }
+
+        public ROk(Mensaje t, Timestamp ts, int n, CipherAES c){
+            super(t.getTag(), ROK);
+            timestamp = ts;
+            nonce = n;
+            cipher = c;
+        }
+
+        public byte[] marshallMsg(int nonce, Timestamp ts) throws IOException {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream( );
+            outputStream.write(marshallInt(nonce));
+            outputStream.write(ts.toString().getBytes("UTF-8"));
+            return outputStream.toByteArray( );
+        }
+
+        protected void readFrom(InputStream i) throws Exception {
+            DataInputStream incon = new DataInputStream(i);
+            byte [] buffer = new byte[INTSIZE];
+            incon.read(buffer);
+            int size = unmarshallInt(buffer);
+            System.out.println("Size " + size);
+            buffer = new byte[size];
+            incon.read(buffer);
+            System.out.println("Msg: " + new String(Base64.getEncoder().encodeToString(buffer)));
+            byte[] decipherMsg = new byte[size];
+            decipherMsg = CipherAES.decipherInGCMMode(buffer);
+            decipherMsg(buffer, size);
+        }
+
+        public void decipherMsg(byte[] buffer, int size) throws Exception {
+            byte[] decipherMsg = new byte[size];
+            decipherMsg = CipherAES.decipherInGCMMode(buffer);
+            nonce = unmarshallInt(Arrays.copyOfRange(decipherMsg, 0, INTSIZE));
+            byte[] tsBytes = new byte[size - INTSIZE];
+            tsBytes = Arrays.copyOfRange(decipherMsg, INTSIZE, size);
+            timestamp = Timestamp.valueOf(new String(tsBytes, "UTF-8"));
+            if (debug){
+                System.out.println("nonce: " + nonce);
+                System.out.println("ts: " + timestamp);
+            }
+        }
+
+        public void writeTo(OutputStream o) throws Exception{
+            super.writeTo(o);
+            DataOutputStream output = new DataOutputStream(o);
+            msgBytes = marshallMsg(nonce, timestamp);
+            byte[] msgCipher = cipher.cipherInGCMMode(msgBytes);
+            System.out.println(msgCipher.length);
+            output.write(marshallInt(msgCipher.length));
+            System.out.println(Base64.getEncoder().encodeToString(msgCipher));
+            output.write(msgCipher);
+        }
+        
+        public boolean isValid(int lastNonce){
+        	return isValid(timestamp, nonce, lastNonce);
+        }
 	}
 	
 	public static class RErr extends Mensaje{

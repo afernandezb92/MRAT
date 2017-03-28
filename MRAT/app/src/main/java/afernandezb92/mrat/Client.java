@@ -59,7 +59,7 @@ public class Client extends MainActivity {
     Boolean debug = true;
     Context context;
     Timestamp ts;
-    CipherAES cipherAes;
+    CipherAES cipherAes, cipherAesMaster;
 
     public Client (String hostname, int port, Context context){
         try {
@@ -67,7 +67,6 @@ public class Client extends MainActivity {
             StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
             StrictMode.setThreadPolicy(policy);
 
-            System.out.println("host " + hostname);
             address = InetAddress.getByName(hostname);
             socket = new Socket(address, port);
             this.context = context;
@@ -133,7 +132,8 @@ public class Client extends MainActivity {
                         if (debug){
                             System.out.println(skey);
                         }
-                        //saveKey(skey);
+                        System.out.println("Msg valid: " + skey.isValid());
+                        saveKey(skey);
                         break;
                     default:
                         System.out.println("Mensaje desconocido");
@@ -179,33 +179,32 @@ public class Client extends MainActivity {
         }
     }
 
-    /*private void saveKey(Mensaje.TSendKey t){
-        String key, nonceString;
-        int nonce;
-        if(debug){
-            System.out.println("Key: " + t.getKeyEncrypt());
-            System.out.println("Nonce: " + t.getNonceEncrypt());
-        }
-        key = RSADecryption.decrypt(t.getKeyEncrypt());
-        nonceString = RSADecryption.decrypt(t.getNonceEncrypt());
-        cipherAes = new CipherAES(key.getBytes());
-        if(debug){
-            System.out.println("Key: " + key);
-            System.out.println("Nonce: " + nonceString);
-        }
-        ts = new Timestamp(System.currentTimeMillis());
-        nonce = Integer.parseInt(nonceString) + 1;
-        Mensaje.ROk ok = new Mensaje.ROk(t, Integer.toString(nonce), Long.toString(ts.getTime()));
-        try {
-            if (debug){
-                System.out.println(ok);
+    private void saveKey(Mensaje.TSendKey t){
+        if(t.isValid()){
+            cipherAesMaster = new CipherAES(t.getKeyMaster());
+            Mensaje.ROk rOk = new Mensaje.ROk(t, t.getNonce()+1, t.getTimestamp(), cipherAesMaster);
+            try {
+                if (debug){
+                    System.out.println(rOk);
+                }
+                o = socket.getOutputStream();
+                rOk.writeTo(o);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            o = socket.getOutputStream();
-            ok.writeTo(o);
-        } catch (Exception e) {
-            e.printStackTrace();
+        } else{
+            Mensaje.RErr err = new Mensaje.RErr(t,"TSendKey Message is not valid");
+            try {
+                if (debug){
+                    System.out.println(err);
+                }
+                o = socket.getOutputStream();
+                err.writeTo(o);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
-    }*/
+    }
 
     //CONTACTS
     private void sendContacts (Mensaje.TGetContact t){
